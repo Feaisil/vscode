@@ -9,7 +9,7 @@ import { TPromise } from 'vs/base/common/winjs.base';
 import * as lifecycle from 'vs/base/common/lifecycle';
 import { IAction } from 'vs/base/common/actions';
 import { IActionItem } from 'vs/base/browser/ui/actionbar/actionbar';
-import { SplitView } from 'vs/base/browser/ui/splitview/splitview';
+import { SplitView, HeaderView } from 'vs/base/browser/ui/splitview/splitview';
 import { ILifecycleService } from 'vs/platform/lifecycle/common/lifecycle';
 import { Scope } from 'vs/workbench/common/memento';
 import { IViewletView, Viewlet } from 'vs/workbench/browser/viewlet';
@@ -23,6 +23,7 @@ import { IWorkspaceContextService } from 'vs/platform/workspace/common/workspace
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IStorageService, StorageScope } from 'vs/platform/storage/common/storage';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
+import { attachHeaderViewStyler } from 'vs/platform/theme/common/styler';
 
 const DEBUG_VIEWS_WEIGHTS = 'debug.viewsweights';
 
@@ -74,6 +75,12 @@ export class DebugViewlet extends Viewlet {
 			this.viewletSettings)
 		);
 
+		this.views.forEach((view, index) => {
+			if (view instanceof HeaderView) {
+				attachHeaderViewStyler(view, this.themeService, { noContrastBorder: index === 0 });
+			}
+		});
+
 		this.splitView = new SplitView(this.$el.getHTMLElement());
 		this.toDispose.push(this.splitView);
 		let weights: number[] = JSON.parse(this.storageService.get(DEBUG_VIEWS_WEIGHTS, StorageScope.WORKSPACE, '[]'));
@@ -103,7 +110,7 @@ export class DebugViewlet extends Viewlet {
 	public focus(): void {
 		super.focus();
 
-		if (!this.contextService.getWorkspace()) {
+		if (!this.contextService.hasWorkspace()) {
 			this.views[0].focusBody();
 		}
 
@@ -116,7 +123,7 @@ export class DebugViewlet extends Viewlet {
 		if (!this.actions) {
 			this.actions = [];
 			this.actions.push(this.instantiationService.createInstance(StartAction, StartAction.ID, StartAction.LABEL));
-			if (this.contextService.getWorkspace()) {
+			if (this.contextService.hasWorkspace()) {
 				this.actions.push(this.instantiationService.createInstance(ConfigureAction, ConfigureAction.ID, ConfigureAction.LABEL));
 			}
 			this.actions.push(this.instantiationService.createInstance(ToggleReplAction, ToggleReplAction.ID, ToggleReplAction.LABEL));
@@ -130,7 +137,7 @@ export class DebugViewlet extends Viewlet {
 	}
 
 	public getActionItem(action: IAction): IActionItem {
-		if (action.id === StartAction.ID && this.contextService.getWorkspace()) {
+		if (action.id === StartAction.ID && this.contextService.hasWorkspace()) {
 			this.startDebugActionItem = this.instantiationService.createInstance(StartDebugActionItem, null, action);
 			return this.startDebugActionItem;
 		}

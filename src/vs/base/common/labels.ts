@@ -25,19 +25,11 @@ export interface IWorkspaceProvider {
 	};
 }
 
-export class PathLabelProvider implements ILabelProvider {
-	private root: string;
-
-	constructor(arg1?: URI | string | IWorkspaceProvider) {
-		this.root = arg1 && getPath(arg1);
-	}
-
-	public getLabel(arg1: URI | string | IWorkspaceProvider): string {
-		return getPathLabel(getPath(arg1), this.root);
-	}
+export interface IUserHomeProvider {
+	userHome: string;
 }
 
-export function getPathLabel(resource: URI | string, basePathProvider?: URI | string | IWorkspaceProvider): string {
+export function getPathLabel(resource: URI | string, basePathProvider?: URI | string | IWorkspaceProvider, userHomeProvider?: IUserHomeProvider): string {
 	const absolutePath = getPath(resource);
 	if (!absolutePath) {
 		return null;
@@ -57,7 +49,12 @@ export function getPathLabel(resource: URI | string, basePathProvider?: URI | st
 		return normalize(absolutePath.charAt(0).toUpperCase() + absolutePath.slice(1), true); // convert c:\something => C:\something
 	}
 
-	return normalize(absolutePath, true);
+	let res = normalize(absolutePath, true);
+	if (!platform.isWindows && userHomeProvider) {
+		res = tildify(res, userHomeProvider.userHome);
+	}
+
+	return res;
 }
 
 function getPath(arg1: URI | string | IWorkspaceProvider): string {
@@ -125,7 +122,7 @@ export function shorten(paths: string[]): string[] {
 		let path = paths[pathIndex];
 
 		if (path === '') {
-			shortenedPaths[pathIndex] = '.';
+			shortenedPaths[pathIndex] = `.${nativeSep}`;
 			continue;
 		}
 

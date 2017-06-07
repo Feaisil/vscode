@@ -10,11 +10,11 @@ import { IWorkbenchContributionsRegistry, IWorkbenchContribution, Extensions as 
 import { Registry } from 'vs/platform/platform';
 import { IMessageService } from 'vs/platform/message/common/message';
 import { IPreferencesService } from 'vs/workbench/parts/preferences/common/preferences';
-import { IWindowsService, IWindowService } from "vs/platform/windows/common/windows";
-import { IConfigurationService } from "vs/platform/configuration/common/configuration";
+import { IWindowsService, IWindowService } from 'vs/platform/windows/common/windows';
+import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { IWindowConfiguration } from "vs/workbench/electron-browser/common";
-import { localize } from "vs/nls";
-import { IEnvironmentService } from "vs/platform/environment/common/environment";
+import { localize } from 'vs/nls';
+import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 
 interface IConfiguration extends IWindowConfiguration {
 	update: { channel: string; };
@@ -26,6 +26,7 @@ export class SettingsChangeRelauncher implements IWorkbenchContribution {
 	private toDispose: IDisposable[] = [];
 
 	private titleBarStyle: 'native' | 'custom';
+	private nativeTabs: boolean;
 	private updateChannel: string;
 	private enableCrashReporter: boolean;
 
@@ -52,6 +53,12 @@ export class SettingsChangeRelauncher implements IWorkbenchContribution {
 		// Titlebar style
 		if (config.window && config.window.titleBarStyle !== this.titleBarStyle && (config.window.titleBarStyle === 'native' || config.window.titleBarStyle === 'custom')) {
 			this.titleBarStyle = config.window.titleBarStyle;
+			changed = true;
+		}
+
+		// Native tabs
+		if (config.window && typeof config.window.nativeTabs === 'boolean' && config.window.nativeTabs !== this.nativeTabs) {
+			this.nativeTabs = config.window.nativeTabs;
 			changed = true;
 		}
 

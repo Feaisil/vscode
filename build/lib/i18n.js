@@ -207,17 +207,6 @@ XLF.parse = function (xlfString) {
     });
 };
 exports.XLF = XLF;
-var vscodeLanguages = [
-    'chs',
-    'cht',
-    'jpn',
-    'kor',
-    'deu',
-    'fra',
-    'esn',
-    'rus',
-    'ita'
-];
 var iso639_3_to_2 = {
     'chs': 'zh-cn',
     'cht': 'zh-tw',
@@ -347,7 +336,7 @@ function escapeCharacters(value) {
     }
     return result.join('');
 }
-function processCoreBundleFormat(fileHeader, json, emitter) {
+function processCoreBundleFormat(fileHeader, languages, json, emitter) {
     var keysSection = json.keys;
     var messageSection = json.messages;
     var bundleSection = json.bundles;
@@ -375,8 +364,14 @@ function processCoreBundleFormat(fileHeader, json, emitter) {
         });
     });
     var languageDirectory = path.join(__dirname, '..', '..', 'i18n');
-    var languages = sortLanguages(fs.readdirSync(languageDirectory).filter(function (item) { return fs.statSync(path.join(languageDirectory, item)).isDirectory(); }));
-    languages.forEach(function (language) {
+    var languageDirs;
+    if (languages) {
+        languageDirs = sortLanguages(languages);
+    }
+    else {
+        languageDirs = sortLanguages(fs.readdirSync(languageDirectory).filter(function (item) { return fs.statSync(path.join(languageDirectory, item)).isDirectory(); }));
+    }
+    languageDirs.forEach(function (language) {
         if (!language.iso639_2) {
             return;
         }
@@ -448,7 +443,8 @@ function processCoreBundleFormat(fileHeader, json, emitter) {
         var value = statistics[key];
         log(key + " has " + value + " untranslated strings.");
     });
-    vscodeLanguages.forEach(function (language) {
+    languageDirs.forEach(function (dir) {
+        var language = dir.name;
         var iso639_2 = iso639_3_to_2[language];
         if (!iso639_2) {
             log("\tCouldn't find iso639 2 mapping for language " + language + ". Using default language instead.");
@@ -473,7 +469,7 @@ function processNlsFiles(opts) {
                 this.emit('error', "Failed to read component file: " + file.relative);
             }
             if (BundledFormat.is(json)) {
-                processCoreBundleFormat(opts.fileHeader, json, this);
+                processCoreBundleFormat(opts.fileHeader, opts.languages, json, this);
             }
         }
         this.emit('data', file);
@@ -513,10 +509,10 @@ var editorResources = [
     { name: 'vs/platform', project: editorProject },
     { name: 'vs/editor/contrib', project: editorProject },
     { name: 'vs/editor', project: editorProject },
-    { name: 'vs/base', project: editorProject },
-    { name: 'vs/code', project: workbenchProject }
+    { name: 'vs/base', project: editorProject }
 ];
 var workbenchResources = [
+    { name: 'vs/code', project: workbenchProject },
     { name: 'vs/workbench', project: workbenchProject },
     { name: 'vs/workbench/parts/cli', project: workbenchProject },
     { name: 'vs/workbench/parts/codeEditor', project: workbenchProject },
@@ -527,7 +523,6 @@ var workbenchResources = [
     { name: 'vs/workbench/parts/extensions', project: workbenchProject },
     { name: 'vs/workbench/parts/feedback', project: workbenchProject },
     { name: 'vs/workbench/parts/files', project: workbenchProject },
-    { name: 'vs/workbench/parts/git', project: workbenchProject },
     { name: 'vs/workbench/parts/html', project: workbenchProject },
     { name: 'vs/workbench/parts/markers', project: workbenchProject },
     { name: 'vs/workbench/parts/nps', project: workbenchProject },
@@ -557,30 +552,30 @@ var workbenchResources = [
 ];
 function getResource(sourceFile) {
     var resource;
-    if (sourceFile.startsWith('vs/platform')) {
+    if (/^vs\/platform/.test(sourceFile)) {
         return { name: 'vs/platform', project: editorProject };
     }
-    else if (sourceFile.startsWith('vs/editor/contrib')) {
+    else if (/^vs\/editor\/contrib/.test(sourceFile)) {
         return { name: 'vs/editor/contrib', project: editorProject };
     }
-    else if (sourceFile.startsWith('vs/editor')) {
+    else if (/^vs\/editor/.test(sourceFile)) {
         return { name: 'vs/editor', project: editorProject };
     }
-    else if (sourceFile.startsWith('vs/base')) {
+    else if (/^vs\/base/.test(sourceFile)) {
         return { name: 'vs/base', project: editorProject };
     }
-    else if (sourceFile.startsWith('vs/code')) {
+    else if (/^vs\/code/.test(sourceFile)) {
         return { name: 'vs/code', project: workbenchProject };
     }
-    else if (sourceFile.startsWith('vs/workbench/parts')) {
+    else if (/^vs\/workbench\/parts/.test(sourceFile)) {
         resource = sourceFile.split('/', 4).join('/');
         return { name: resource, project: workbenchProject };
     }
-    else if (sourceFile.startsWith('vs/workbench/services')) {
+    else if (/^vs\/workbench\/services/.test(sourceFile)) {
         resource = sourceFile.split('/', 4).join('/');
         return { name: resource, project: workbenchProject };
     }
-    else if (sourceFile.startsWith('vs/workbench')) {
+    else if (/^vs\/workbench/.test(sourceFile)) {
         return { name: 'vs/workbench', project: workbenchProject };
     }
     throw new Error("Could not identify the XLF bundle for " + sourceFile);
@@ -889,11 +884,11 @@ function retrieveResource(language, resource, apiHostname, credentials) {
             method: 'GET'
         };
         var request = http.request(options, function (res) {
-            var xlfBuffer = '';
-            res.on('data', function (data) { return xlfBuffer += data; });
+            var xlfBuffer = [];
+            res.on('data', function (chunk) { return xlfBuffer.push(chunk); });
             res.on('end', function () {
                 if (res.statusCode === 200) {
-                    resolve(new File({ contents: new Buffer(xlfBuffer), path: project + "/" + iso639_2_to_3[language] + "/" + slug + ".xlf" }));
+                    resolve(new File({ contents: Buffer.concat(xlfBuffer), path: project + "/" + iso639_2_to_3[language] + "/" + slug + ".xlf" }));
                 }
                 reject(slug + " in " + project + " returned no data. Response code: " + res.statusCode + ".");
             });
@@ -905,13 +900,16 @@ function retrieveResource(language, resource, apiHostname, credentials) {
     });
 }
 function prepareJsonFiles() {
+    var parsePromises = [];
     return event_stream_1.through(function (xlf) {
         var stream = this;
-        XLF.parse(xlf.contents.toString()).then(function (resolvedFiles) {
+        var parsePromise = XLF.parse(xlf.contents.toString());
+        parsePromises.push(parsePromise);
+        parsePromise.then(function (resolvedFiles) {
             resolvedFiles.forEach(function (file) {
                 var messages = file.messages, translatedFile;
                 // ISL file path always starts with 'build/'
-                if (file.originalFilePath.startsWith('build/')) {
+                if (/^build\//.test(file.originalFilePath)) {
                     var defaultLanguages = { 'zh-hans': true, 'zh-hant': true, 'ko': true };
                     if (path.basename(file.originalFilePath) === 'Default' && !defaultLanguages[file.language]) {
                         return;
@@ -926,6 +924,11 @@ function prepareJsonFiles() {
         }, function (rejectReason) {
             throw new Error("XLF parsing error: " + rejectReason);
         });
+    }, function () {
+        var _this = this;
+        Promise.all(parsePromises)
+            .then(function () { _this.emit('end'); })
+            .catch(function (reason) { throw new Error(reason); });
     });
 }
 exports.prepareJsonFiles = prepareJsonFiles;
@@ -942,7 +945,6 @@ function createI18nFile(base, originalFilePath, messages) {
         contents: new Buffer(content, 'utf8')
     });
 }
-exports.createI18nFile = createI18nFile;
 var languageNames = {
     'chs': 'Simplified Chinese',
     'cht': 'Traditional Chinese',
@@ -962,7 +964,8 @@ var encodings = {
     'fra': 'CP1252',
     'esn': 'CP1252',
     'rus': 'CP1251',
-    'ita': 'CP1252'
+    'ita': 'CP1252',
+    'ptb': 'CP1252'
 };
 function createIslFile(base, originalFilePath, messages, language) {
     var content = [];
@@ -1017,7 +1020,6 @@ function createIslFile(base, originalFilePath, messages, language) {
         contents: iconv.encode(new Buffer(content.join('\r\n'), 'utf8'), encodings[language])
     });
 }
-exports.createIslFile = createIslFile;
 function encodeEntities(value) {
     var result = [];
     for (var i = 0; i < value.length; i++) {
@@ -1041,4 +1043,3 @@ function encodeEntities(value) {
 function decodeEntities(value) {
     return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
-exports.decodeEntities = decodeEntities;

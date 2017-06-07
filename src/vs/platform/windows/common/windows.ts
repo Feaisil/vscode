@@ -37,6 +37,7 @@ export interface IWindowsService {
 	isMaximized(windowId: number): TPromise<boolean>;
 	maximizeWindow(windowId: number): TPromise<void>;
 	unmaximizeWindow(windowId: number): TPromise<void>;
+	onWindowTitleDoubleClick(windowId: number): TPromise<void>;
 	setDocumentEdited(windowId: number, flag: boolean): TPromise<void>;
 	quit(): TPromise<void>;
 	relaunch(options: { addArgs?: string[], removeArgs?: string[] }): TPromise<void>;
@@ -49,7 +50,7 @@ export interface IWindowsService {
 	openWindow(paths: string[], options?: { forceNewWindow?: boolean, forceReuseWindow?: boolean }): TPromise<void>;
 	openNewWindow(): TPromise<void>;
 	showWindow(windowId: number): TPromise<void>;
-	getWindows(): TPromise<{ id: number; path: string; title: string; }[]>;
+	getWindows(): TPromise<{ id: number; path: string; title: string; filename?: string; }[]>;
 	getWindowCount(): TPromise<number>;
 	log(severity: string, ...messages: string[]): TPromise<void>;
 	// TODO@joao: what?
@@ -89,6 +90,7 @@ export interface IWindowService {
 	isMaximized(): TPromise<boolean>;
 	maximizeWindow(): TPromise<void>;
 	unmaximizeWindow(): TPromise<void>;
+	onWindowTitleDoubleClick(): TPromise<void>;
 }
 
 export type MenuBarVisibility = 'default' | 'visible' | 'toggle' | 'hidden';
@@ -103,4 +105,6 @@ export interface IWindowSettings {
 	autoDetectHighContrast: boolean;
 	menuBarVisibility: MenuBarVisibility;
 	newWindowDimensions: 'default' | 'inherit' | 'maximized' | 'fullscreen';
+	nativeTabs: boolean;
+	enableMenuBarMnemonics: boolean;
 }

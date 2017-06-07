@@ -8,6 +8,7 @@
 import { TPromise } from 'vs/base/common/winjs.base';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { assign } from 'vs/base/common/objects';
+import URI from 'vs/base/common/uri';
 import { IWindowsService } from 'vs/platform/windows/common/windows';
 import { IEnvironmentService } from 'vs/platform/environment/common/environment';
 import { shell, crashReporter, app } from 'electron';
@@ -15,9 +16,7 @@ import Event, { chain } from 'vs/base/common/event';
 import { fromEventEmitter } from 'vs/base/node/event';
 import { IURLService } from 'vs/platform/url/common/url';
 import { ITelemetryData } from 'vs/platform/telemetry/common/telemetry';
-
-// TODO@Joao: remove this dependency, move all implementation to this class
-import { OpenContext } from 'vs/code/common/windows';
+import { OpenContext } from 'vs/code/common/windows'; // TODO@Joao: remove this dependency, move all implementation to this class
 import { IWindowsMainService } from 'vs/code/electron-main/windows';
 import { ILifecycleService } from "vs/code/electron-main/lifecycle";
 
@@ -44,7 +43,7 @@ export class WindowsService implements IWindowsService, IDisposable {
 	) {
 		chain(urlService.onOpenURL)
 			.filter(uri => uri.authority === 'file' && !!uri.path)
-			.map(uri => uri.path)
+			.map(uri => URI.file(uri.fsPath))
 			.on(this.openFileForURI, this, this.disposables);
 	}
 
@@ -124,7 +123,7 @@ export class WindowsService implements IWindowsService, IDisposable {
 		const vscodeWindow = this.windowsMainService.getWindowById(windowId);
 
 		if (vscodeWindow) {
-			vscodeWindow.win.setRepresentedFilename(fileName);
+			vscodeWindow.setRepresentedFilename(fileName);
 		}
 
 		return TPromise.as(null);
@@ -208,6 +207,16 @@ export class WindowsService implements IWindowsService, IDisposable {
 		return TPromise.as(null);
 	}
 
+	onWindowTitleDoubleClick(windowId: number): TPromise<void> {
+		const vscodeWindow = this.windowsMainService.getWindowById(windowId);
+
+		if (vscodeWindow) {
+			vscodeWindow.onWindowTitleDoubleClick();
+		}
+
+		return TPromise.as(null);
+	}
+
 	setDocumentEdited(windowId: number, flag: boolean): TPromise<void> {
 		const vscodeWindow = this.windowsMainService.getWindowById(windowId);
 
@@ -244,7 +253,8 @@ export class WindowsService implements IWindowsService, IDisposable {
 
 	getWindows(): TPromise<{ id: number; path: string; title: string; }[]> {
 		const windows = this.windowsMainService.getWindows();
-		const result = windows.map(w => ({ path: w.openedWorkspacePath, title: w.win.getTitle(), id: w.id }));
+		const result = windows.map(w => ({ path: w.openedWorkspacePath, title: w.win.getTitle(), id: w.id, filename: w.getRepresentedFilename() }));
+
 		return TPromise.as(result);
 	}
 
@@ -301,9 +311,9 @@ export class WindowsService implements IWindowsService, IDisposable {
 		return TPromise.as(null);
 	}
 
-	private openFileForURI(filePath: string): TPromise<void> {
+	private openFileForURI(uri: URI): TPromise<void> {
 		const cli = assign(Object.create(null), this.environmentService.args, { goto: true });
-		const pathsToOpen = [filePath];
+		const pathsToOpen = [uri.fsPath];
 
 		this.windowsMainService.open({ context: OpenContext.API, cli, pathsToOpen });
 		return TPromise.as(null);
